@@ -59,7 +59,7 @@ namespace CRM_Replicado_Atributos
 
             RetrieveAllEntitiesRequest metaDataRequest = new RetrieveAllEntitiesRequest();
             //RetrieveAllEntitiesResponse metaDataResponse = new RetrieveAllEntitiesResponse();
-            metaDataRequest.EntityFilters = EntityFilters.Entity;
+            metaDataRequest.EntityFilters = EntityFilters.Entity | EntityFilters.Relationships;
             metaDataResponse = (RetrieveAllEntitiesResponse)_serviceProxy.Execute(metaDataRequest);
             metaDataRequest.EntityFilters = EntityFilters.Entity;
             metaDataResponse = (RetrieveAllEntitiesResponse)_serviceProxy.Execute(metaDataRequest);
@@ -118,124 +118,211 @@ namespace CRM_Replicado_Atributos
 
         private void button1_Click(object sender, EventArgs e)
         {
+
             foreach (TreeNode tn in treeView1.Nodes)
             {
-                if (tn.Checked)
+                try
                 {
-                    var entities = metaDataResponse.EntityMetadata.Where(EntityMetadata => EntityMetadata.LogicalName == tn.Text).OrderBy(EntityMetadata => EntityMetadata.LogicalName);
 
-                    foreach (EntityMetadata entity in entities)
+
+                    if (tn.Checked)
                     {
+                        var entities = metaDataResponse.EntityMetadata.Where(EntityMetadata => EntityMetadata.LogicalName == tn.Text).OrderBy(EntityMetadata => EntityMetadata.LogicalName);
 
-                        //get the  atribute name from entity source
-                        RetrieveAttributeRequest attributeRequest = new RetrieveAttributeRequest
-                        {
-                            EntityLogicalName = entity.LogicalName,
-                            LogicalName =  entity.PrimaryNameAttribute,
-                            RetrieveAsIfPublished = true
-                        };
-                        RetrieveAttributeResponse attributeResponse =
-                     (RetrieveAttributeResponse)_serviceProxy.Execute(attributeRequest);
-
-
-                        CreateEntityRequest createrequest = new CreateEntityRequest
+                        foreach (EntityMetadata entity in entities)
                         {
 
-                            //Define the entity
-                            Entity = new EntityMetadata
+                            //get the  atribute name from entity source
+                            RetrieveAttributeRequest attributeRequest = new RetrieveAttributeRequest
                             {
-                                SchemaName = entity.SchemaName,
-                                DisplayName = entity.DisplayName,
-                                DisplayCollectionName =  entity.DisplayCollectionName,
-                                Description = entity.Description, 
-                                OwnershipType = OwnershipTypes.UserOwned,
-                                IsActivity = false,
+                                EntityLogicalName = entity.LogicalName,
+                                LogicalName = entity.PrimaryNameAttribute,
+                                RetrieveAsIfPublished = true
+                            };
+                            RetrieveAttributeResponse attributeResponse =
+                         (RetrieveAttributeResponse)_serviceProxy.Execute(attributeRequest);
 
-                            },
-                            //////////// Define the primary attribute for the entity
-                            PrimaryAttribute = new StringAttributeMetadata
-                            {
-                                SchemaName = attributeResponse.AttributeMetadata.SchemaName,
-                                RequiredLevel = attributeResponse.AttributeMetadata.RequiredLevel,
-                                MaxLength = 100,
-                                FormatName = StringFormatName.Text,
-                                DisplayName =  attributeResponse.AttributeMetadata.DisplayName,
-                                Description = attributeResponse.AttributeMetadata.Description,
-                            }
-
-                        };
-                        _serviceProxyProdware.Execute(createrequest);
-
-
-
-
-
-                        RetrieveEntityRequest entityRequest1 = new RetrieveEntityRequest
-                        {
-                            EntityFilters = EntityFilters.Attributes,
-                            LogicalName = entity.LogicalName,
-                            RetrieveAsIfPublished = true
-                        };
-
-                        RetrieveEntityResponse entityResponse1 = (RetrieveEntityResponse)_serviceProxy.Execute(entityRequest1);
-
-                        List<AttributeMetadata>   addedAttributes = new List<AttributeMetadata>();
-                        foreach (AttributeMetadata atributo in entityResponse1.EntityMetadata.Attributes)
-                        {
-                            addedAttributes.Add(atributo);
-
-                        }
-
-
-
-
-                        foreach (AttributeMetadata anAttribute in addedAttributes)
-                        {
 
                             try
                             {
-                                // Create the request.
-                                CreateAttributeRequest createAttributeRequest = new CreateAttributeRequest
+
+                                CreateEntityRequest createrequest = new CreateEntityRequest
                                 {
-                                    EntityName = entity.LogicalName,
-                                    Attribute = anAttribute
+
+                                    //Define the entity
+                                    Entity = new EntityMetadata
+                                    {
+                                        SchemaName = entity.SchemaName,
+                                        DisplayName = entity.DisplayName,
+                                        DisplayCollectionName = entity.DisplayCollectionName,
+                                        Description = entity.Description,
+                                        OwnershipType = OwnershipTypes.UserOwned,
+                                        IsActivity = false,
+
+                                    },
+                                    //////////// Define the primary attribute for the entity
+                                    PrimaryAttribute = new StringAttributeMetadata
+                                    {
+                                        SchemaName = attributeResponse.AttributeMetadata.SchemaName,
+                                        RequiredLevel = attributeResponse.AttributeMetadata.RequiredLevel,
+                                        MaxLength = 100,
+                                        FormatName = StringFormatName.Text,
+                                        DisplayName = attributeResponse.AttributeMetadata.DisplayName,
+                                        Description = attributeResponse.AttributeMetadata.Description,
+                                    }
+
                                 };
-
-                                // Execute the request.
-
-                                _serviceProxyProdware.Execute(createAttributeRequest);
+                                _serviceProxyProdware.Execute(createrequest);
                             }
                             catch (Exception ex)
-                            { 
+                            {
                             }
+                            CrearAtributossEntidad(entity, tn);
 
                         }
 
-
-
-
-
-
-
                     }
-
-
-
-
-
-
-
-                 
-
-
-
-
-
-
-
-
+                }
+                catch (Exception ex)
+                {
                 }
             }
+
+        }
+
+        private void button2_Click(object sender, EventArgs e)
+        {
+            foreach (TreeNode tn in treeView1.Nodes)
+            {
+                tn.Checked = true;
+
+                foreach (TreeNode child in tn.Nodes)
+                {
+                    child.Checked = true;
+                }
+            }
+
+
+        }
+
+
+
+
+        private void CrearAtributossEntidad(EntityMetadata entidad, TreeNode nombreentidad)
+        {
+
+
+            RetrieveEntityRequest entityRequest1 = new RetrieveEntityRequest
+            {
+                EntityFilters = EntityFilters.Attributes,
+                LogicalName = entidad.LogicalName,
+                RetrieveAsIfPublished = true
+            };
+
+            RetrieveEntityResponse entityResponse1 = (RetrieveEntityResponse)_serviceProxy.Execute(entityRequest1);
+
+            List<AttributeMetadata> addedAttributes = new List<AttributeMetadata>();
+
+
+            foreach (TreeNode child in nombreentidad.Nodes)
+            {
+                if (child.Checked)
+                {
+                    foreach (AttributeMetadata atributo in entityResponse1.EntityMetadata.Attributes)
+                    {
+                        try
+                        {
+                            if (atributo.LogicalName.ToLower() == child.Text.ToLower())
+                                addedAttributes.Add(atributo);
+                        }
+                        catch (Exception ex)
+                        {
+                        }
+
+                    }
+                }
+            }
+
+
+            foreach (AttributeMetadata anAttribute in addedAttributes)
+            {
+
+                try
+                {
+
+                    if (anAttribute.GetType().ToString() == "Microsoft.Xrm.Sdk.Metadata.LookupAttributeMetadata")
+                    {
+                        CrearAtributoLookup(anAttribute);
+                        break;
+                    }
+
+                    else if (anAttribute.GetType().ToString() == "Microsoft.Xrm.Sdk.Metadata.PicklistAttributeMetadata")
+                    {
+                        if (((Microsoft.Xrm.Sdk.Metadata.OptionSetMetadataBase)(((Microsoft.Xrm.Sdk.Metadata.EnumAttributeMetadata)(anAttribute)).OptionSet)).IsGlobal == true)
+                        {
+                            ((Microsoft.Xrm.Sdk.Metadata.EnumAttributeMetadata)(anAttribute)).OptionSet.Options.Clear();
+
+                        }
+                    }
+
+                    // Create the request.
+                    CreateAttributeRequest createAttributeRequest = new CreateAttributeRequest
+                    {
+                        EntityName = entidad.LogicalName,
+                        Attribute = anAttribute
+                    };
+                    // Execute the request.
+                    _serviceProxyProdware.Execute(createAttributeRequest);
+
+                }
+                catch (Exception ex)
+                {
+                }
+
+            }
+
+        }
+
+
+        private void CrearAtributoLookup(AttributeMetadata anAttribute)
+        {
+            CreateOneToManyRequest createOneToManyRelationshipRequest =
+            new CreateOneToManyRequest
+            {
+                OneToManyRelationship =
+                new OneToManyRelationshipMetadata
+                {
+                    ReferencedEntity = ((Microsoft.Xrm.Sdk.Metadata.LookupAttributeMetadata)(anAttribute)).Targets[0],
+                    ReferencingEntity = anAttribute.EntityLogicalName,
+                    SchemaName = anAttribute.SchemaName,
+                    AssociatedMenuConfiguration = new AssociatedMenuConfiguration
+                    {
+                        Behavior = AssociatedMenuBehavior.DoNotDisplay,
+                        Group = AssociatedMenuGroup.Details,
+                        Label = new Microsoft.Xrm.Sdk.Label("Account", 3082),
+                        Order = 10000
+                    },
+                    CascadeConfiguration = new CascadeConfiguration
+                    {
+                        Assign = CascadeType.NoCascade,
+                        Delete = CascadeType.RemoveLink,
+                        Merge = CascadeType.NoCascade,
+                        Reparent = CascadeType.NoCascade,
+                        Share = CascadeType.NoCascade,
+                        Unshare = CascadeType.NoCascade
+                    }
+                },
+                Lookup = new LookupAttributeMetadata
+                {
+                    SchemaName = anAttribute.SchemaName,
+                    DisplayName = anAttribute.DisplayName,
+                    RequiredLevel = anAttribute.RequiredLevel,
+                    Description = anAttribute.Description
+                }
+            };
+            var createOneToManyRelationshipResponse = (CreateOneToManyResponse)_serviceProxyProdware.Execute(createOneToManyRelationshipRequest);
+
+
 
         }
 
