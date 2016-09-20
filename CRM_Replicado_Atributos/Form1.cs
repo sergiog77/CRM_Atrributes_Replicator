@@ -17,6 +17,7 @@ using Microsoft.Xrm.Sdk.Metadata;
 using System.ServiceModel.Description;
 using Microsoft.Xrm.Sdk.Client;
 using CRM_Replicado_Atributos.AppCode;
+using System.IO;
 
 
 
@@ -59,13 +60,16 @@ namespace CRM_Replicado_Atributos
 
             RetrieveAllEntitiesRequest metaDataRequest = new RetrieveAllEntitiesRequest();
             //RetrieveAllEntitiesResponse metaDataResponse = new RetrieveAllEntitiesResponse();
-            metaDataRequest.EntityFilters = EntityFilters.Entity | EntityFilters.Relationships;
+            metaDataRequest.EntityFilters = EntityFilters.Entity;
             metaDataResponse = (RetrieveAllEntitiesResponse)_serviceProxy.Execute(metaDataRequest);
             metaDataRequest.EntityFilters = EntityFilters.Entity;
             metaDataResponse = (RetrieveAllEntitiesResponse)_serviceProxy.Execute(metaDataRequest);
             //obtenemos el listado de las entiedades de multas
 
-            var entities = metaDataResponse.EntityMetadata.Where(EntityMetadata => EntityMetadata.IsCustomizable.Value == true).OrderBy(EntityMetadata => EntityMetadata.LogicalName);
+          //  var entities = metaDataResponse.EntityMetadata.Where(EntityMetadata => EntityMetadata.IsCustomizable.Value == true).OrderBy(EntityMetadata => EntityMetadata.LogicalName);
+            var entities = metaDataResponse.EntityMetadata.Where(EntityMetadata => EntityMetadata.LogicalName == "lms_remesa").OrderBy(EntityMetadata => EntityMetadata.LogicalName);
+
+            
 
 
             foreach (EntityMetadata entity in entities)
@@ -95,7 +99,7 @@ namespace CRM_Replicado_Atributos
 
             RetrieveEntityRequest entityRequest1 = new RetrieveEntityRequest
             {
-                EntityFilters = EntityFilters.Attributes,
+                EntityFilters = EntityFilters.Attributes| EntityFilters.Relationships,
                 LogicalName = entity.LogicalName,
                 RetrieveAsIfPublished = true
             };
@@ -119,25 +123,35 @@ namespace CRM_Replicado_Atributos
         private void button1_Click(object sender, EventArgs e)
         {
 
+
+            StreamWriter file2 = new StreamWriter(@"log.txt", true);
+            file2.WriteLine("Actualizando las entidades:");
+            file2.Close();
+
+
+
+
             foreach (TreeNode tn in treeView1.Nodes)
             {
                 try
                 {
-
-
                     if (tn.Checked)
                     {
                         var entities = metaDataResponse.EntityMetadata.Where(EntityMetadata => EntityMetadata.LogicalName == tn.Text).OrderBy(EntityMetadata => EntityMetadata.LogicalName);
 
                         foreach (EntityMetadata entity in entities)
                         {
+                            StreamWriter file1 = new StreamWriter(@"log.txt", true);
+                            file1.WriteLine("   Actualizando la entidad " + entity.LogicalName);
+                            file1.Close();
+                            
 
                             //get the  atribute name from entity source
                             RetrieveAttributeRequest attributeRequest = new RetrieveAttributeRequest
                             {
                                 EntityLogicalName = entity.LogicalName,
                                 LogicalName = entity.PrimaryNameAttribute,
-                                RetrieveAsIfPublished = true
+                                RetrieveAsIfPublished = true,
                             };
                             RetrieveAttributeResponse attributeResponse =
                          (RetrieveAttributeResponse)_serviceProxy.Execute(attributeRequest);
@@ -148,6 +162,8 @@ namespace CRM_Replicado_Atributos
 
                                 CreateEntityRequest createrequest = new CreateEntityRequest
                                 {
+                                   // HasNotes = entity,
+                                   // HasActivities = false,
 
                                     //Define the entity
                                     Entity = new EntityMetadata
@@ -156,8 +172,9 @@ namespace CRM_Replicado_Atributos
                                         DisplayName = entity.DisplayName,
                                         DisplayCollectionName = entity.DisplayCollectionName,
                                         Description = entity.Description,
-                                        OwnershipType = OwnershipTypes.UserOwned,
-                                        IsActivity = false,
+                                        OwnershipType = entity.OwnershipType,
+                                        IsActivity = entity.IsActivity,
+                                        IsAvailableOffline=true
 
                                     },
                                     //////////// Define the primary attribute for the entity
@@ -176,6 +193,9 @@ namespace CRM_Replicado_Atributos
                             }
                             catch (Exception ex)
                             {
+                                StreamWriter file3 = new StreamWriter(@"log.txt", true);
+                                file3.WriteLine("      Error al crear la entidad " + tn.Text + ". Error:" + ex.Message);
+                                file3.Close();
                             }
                             CrearAtributossEntidad(entity, tn);
 
@@ -214,16 +234,13 @@ namespace CRM_Replicado_Atributos
 
             RetrieveEntityRequest entityRequest1 = new RetrieveEntityRequest
             {
-                EntityFilters = EntityFilters.Attributes,
+                EntityFilters = EntityFilters.Attributes|EntityFilters.Relationships,
                 LogicalName = entidad.LogicalName,
                 RetrieveAsIfPublished = true
             };
 
             RetrieveEntityResponse entityResponse1 = (RetrieveEntityResponse)_serviceProxy.Execute(entityRequest1);
-
             List<AttributeMetadata> addedAttributes = new List<AttributeMetadata>();
-
-
             foreach (TreeNode child in nombreentidad.Nodes)
             {
                 if (child.Checked)
@@ -246,14 +263,19 @@ namespace CRM_Replicado_Atributos
 
             foreach (AttributeMetadata anAttribute in addedAttributes)
             {
+                StreamWriter file1 = new StreamWriter(@"log.txt", true);
+                file1.WriteLine("      Actualizando el atributo : " + anAttribute.LogicalName);
+                file1.Close();
+
+
 
                 try
                 {
 
                     if (anAttribute.GetType().ToString() == "Microsoft.Xrm.Sdk.Metadata.LookupAttributeMetadata")
                     {
-                        CrearAtributoLookup(anAttribute);
-                        break;
+                        CrearAtributoLookup(anAttribute, entityResponse1);
+                        continue;
                     }
 
                     else if (anAttribute.GetType().ToString() == "Microsoft.Xrm.Sdk.Metadata.PicklistAttributeMetadata")
@@ -264,6 +286,40 @@ namespace CRM_Replicado_Atributos
 
                         }
                     }
+                    else if (anAttribute.GetType().ToString() == "Microsoft.Xrm.Sdk.Metadata.MemoAttributeMetadata")
+                    {
+
+                        MemoAttributeMetadata memoAttribute = new MemoAttributeMetadata
+                        {
+                            // Set base properties
+                            SchemaName = anAttribute.SchemaName,
+                            DisplayName = anAttribute.DisplayName,
+                            RequiredLevel = new AttributeRequiredLevelManagedProperty(AttributeRequiredLevel.None),
+                            Description = anAttribute.Description,
+                            // Set extended properties
+                            Format = Microsoft.Xrm.Sdk.Metadata.StringFormat.TextArea,
+                            ImeMode = Microsoft.Xrm.Sdk.Metadata.ImeMode.Disabled,
+                            MaxLength = 500
+                        };
+
+                        CreateAttributeRequest createAttributeRequest1 = new CreateAttributeRequest
+                        {
+                            EntityName = entidad.LogicalName,
+                            Attribute = memoAttribute
+                        };
+                        // Execute the request.
+                        _serviceProxyProdware.Execute(createAttributeRequest1);
+
+
+
+
+
+
+                    }
+
+
+
+
 
                     // Create the request.
                     CreateAttributeRequest createAttributeRequest = new CreateAttributeRequest
@@ -274,9 +330,16 @@ namespace CRM_Replicado_Atributos
                     // Execute the request.
                     _serviceProxyProdware.Execute(createAttributeRequest);
 
+                    StreamWriter file3 = new StreamWriter(@"log.txt", true);
+                    file3.WriteLine("      atributo " + anAttribute.SchemaName + ". Creado correctamente");
+                    file3.Close();
+
                 }
                 catch (Exception ex)
                 {
+                    StreamWriter file3 = new StreamWriter(@"log.txt", true);
+                    file3.WriteLine("      Error al crear el atributo " + anAttribute.SchemaName + ". Error:" + ex.Message);
+                    file3.Close();
                 }
 
             }
@@ -284,43 +347,73 @@ namespace CRM_Replicado_Atributos
         }
 
 
-        private void CrearAtributoLookup(AttributeMetadata anAttribute)
+        private void CrearAtributoLookup(AttributeMetadata anAttribute,  RetrieveEntityResponse entidad )
         {
-            CreateOneToManyRequest createOneToManyRelationshipRequest =
-            new CreateOneToManyRequest
+            try
             {
-                OneToManyRelationship =
-                new OneToManyRelationshipMetadata
+
+                var oneToNRelationships = entidad.EntityMetadata.ManyToOneRelationships;
+
+
+                AssociatedMenuConfiguration menuconf = new AssociatedMenuConfiguration();
+                CascadeConfiguration cascade = new CascadeConfiguration();
+
+
+                foreach (OneToManyRelationshipMetadata relation in oneToNRelationships)
                 {
-                    ReferencedEntity = ((Microsoft.Xrm.Sdk.Metadata.LookupAttributeMetadata)(anAttribute)).Targets[0],
-                    ReferencingEntity = anAttribute.EntityLogicalName,
-                    SchemaName = anAttribute.SchemaName,
-                    AssociatedMenuConfiguration = new AssociatedMenuConfiguration
+                    if (relation.ReferencingAttribute == anAttribute.SchemaName)
                     {
-                        Behavior = AssociatedMenuBehavior.DoNotDisplay,
-                        Group = AssociatedMenuGroup.Details,
-                        Label = new Microsoft.Xrm.Sdk.Label("Account", 3082),
-                        Order = 10000
-                    },
-                    CascadeConfiguration = new CascadeConfiguration
-                    {
-                        Assign = CascadeType.NoCascade,
-                        Delete = CascadeType.RemoveLink,
-                        Merge = CascadeType.NoCascade,
-                        Reparent = CascadeType.NoCascade,
-                        Share = CascadeType.NoCascade,
-                        Unshare = CascadeType.NoCascade
+                        menuconf = relation.AssociatedMenuConfiguration;
+                        cascade = relation.CascadeConfiguration;
+
+                        CreateOneToManyRequest createOneToManyRelationshipRequest =
+               new CreateOneToManyRequest
+               {
+                   OneToManyRelationship =
+                   new OneToManyRelationshipMetadata
+                   {
+                       ReferencedEntity = relation.ReferencedEntity,
+                       ReferencingEntity = anAttribute.EntityLogicalName,
+                       SchemaName = ((Microsoft.Xrm.Sdk.Metadata.RelationshipMetadataBase)(relation)).SchemaName,
+                       AssociatedMenuConfiguration = new AssociatedMenuConfiguration
+                       {
+                           Behavior = menuconf.Behavior,
+                           Group = menuconf.Group,
+                           Label = menuconf.Label,
+                           Order = menuconf.Order,
+                       },
+                       CascadeConfiguration = new CascadeConfiguration
+                       {
+                           Assign = cascade.Assign,
+                           Delete = cascade.Delete,
+                           Merge = cascade.Merge,
+                           Reparent = cascade.Reparent,
+                           Share = cascade.Share,
+                           Unshare = cascade.Unshare
+                       }
+                   },
+                   Lookup = new LookupAttributeMetadata
+                   {
+                       SchemaName = anAttribute.SchemaName,
+                       DisplayName = anAttribute.DisplayName,
+                       RequiredLevel = anAttribute.RequiredLevel,
+                       Description = anAttribute.Description
+                   }
+               };
+                        var createOneToManyRelationshipResponse = (CreateOneToManyResponse)_serviceProxyProdware.Execute(createOneToManyRelationshipRequest);
+
+
+
+                        break;
                     }
-                },
-                Lookup = new LookupAttributeMetadata
-                {
-                    SchemaName = anAttribute.SchemaName,
-                    DisplayName = anAttribute.DisplayName,
-                    RequiredLevel = anAttribute.RequiredLevel,
-                    Description = anAttribute.Description
                 }
-            };
-            var createOneToManyRelationshipResponse = (CreateOneToManyResponse)_serviceProxyProdware.Execute(createOneToManyRelationshipRequest);
+
+            }
+            catch (Exception ex)
+            { 
+            }
+
+           
 
 
 
